@@ -99,6 +99,16 @@ class ProxyService(
             .headers(headers.toHeaders())
             .removeHeader("Authorization")
             .header("Host", "api.deepinfra.com")
+            .removeHeader("x-real-ip")
+            .removeHeader("x-forwarded-for")
+            .removeHeader("x-forwarded-host")
+            .removeHeader("x-forwarded-port")
+            .removeHeader("x-forwarded-proto")
+            .removeHeader("cf-ray")
+            .removeHeader("cdn-loop")
+            .removeHeader("cf-connecting-ip")
+            .removeHeader("cf-ipcountry")
+            .removeHeader("cf-visitor")
             .build()
 
         // 开始重试循环
