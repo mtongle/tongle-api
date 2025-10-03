@@ -13,10 +13,10 @@
 **请求示例**:
 ```bash
 # 通过 QQ 号查询手机号
-curl "http://localhost:7001/sedb/qq?type=qqid&value=12345678"
+curl "https://api.tongle.dev/sedb/qq?type=qqid&value=12345678"
 
 # 通过手机号查询 QQ 号
-curl "http://localhost:7001/sedb/qq?type=phone&value=13800138000"
+curl "https://api.tongle.dev/sedb/qq?type=phone&value=13800138000"
 ```
 
 ### 2. DeepInfra AI API 免费代理服务
@@ -30,10 +30,10 @@ curl "http://localhost:7001/sedb/qq?type=phone&value=13800138000"
 **请求示例**:
 ```bash
 # 代理调用 DeepInfra 的模型列表
-curl "http://localhost:7001/deepinfra/v1/models"
+curl "https://api.tongle.dev/deepinfra/v1/models"
 
 # 代理调用 AI 聊天完成接口
-curl -X POST "http://localhost:7001/deepinfra/v1/chat/completions" \
+curl -X POST "https://api.tongle.dev/deepinfra/v1/chat/completions" \
   -H "Content-Type: application/json" \
   -d '{
     "model": "deepseek-ai/DeepSeek-V3.2-Exp",
