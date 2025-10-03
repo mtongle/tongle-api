@@ -26,25 +26,30 @@ class TorService {
     private val logger = LoggerFactory.getLogger(TorService::class.java)
 
     private val lock = ReentrantLock()
-
+    private var lastChanged = object { var value = 0L }
 
     private val password = "142857@Tor"
 
     fun newIdentity() {
         if ( lock.tryLock() ) {
             try {
-                Socket("127.0.0.1", 9051).use { socket ->
-                    val writer = PrintWriter(socket.getOutputStream(), true)
-                    val reader = socket.getInputStream().bufferedReader()
+                val currentTime = System.currentTimeMillis()
+                if (lastChanged.value < (currentTime - 10000)) {
+                    Socket("127.0.0.1", 9051).use { socket ->
+                        val writer = PrintWriter(socket.getOutputStream(), true)
+                        val reader = socket.getInputStream().bufferedReader()
 
-                    writer.println("AUTHENTICATE \"$password\"")
-                    writer.println("SIGNAL NEWNYM")
-                    val resp = reader.readLine()
+                        writer.println("AUTHENTICATE \"$password\"")
+                        writer.println("SIGNAL NEWNYM")
+                        val resp = reader.readLine()
 
-                    if (!resp.startsWith("250")) throw RuntimeException("Unexpected tor socket response: $resp")
-                    logger.info("Tor outbound server changed")
-                    sleep(3_000)
+                        if (!resp.startsWith("250")) throw RuntimeException("Unexpected tor socket response: $resp")
+
+                        lastChanged.value = currentTime
+                        logger.info("Tor outbound server changed")
+                    }
                 }
+                sleep(5_000)
             } finally {
                 lock.unlock()
             }
