@@ -19,25 +19,37 @@ import java.net.InetSocketAddress
 import java.net.Proxy
 import java.net.Socket
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.locks.ReentrantLock
 
 @Service
 class TorService {
     private val logger = LoggerFactory.getLogger(TorService::class.java)
 
+    private val lock = ReentrantLock()
+
+
     private val password = "142857@Tor"
 
     fun newIdentity() {
-        Socket("127.0.0.1", 9051).use { socket ->
-            val writer = PrintWriter(socket.getOutputStream(), true)
-            val reader = socket.getInputStream().bufferedReader()
+        if ( lock.tryLock() ) {
+            try {
+                Socket("127.0.0.1", 9051).use { socket ->
+                    val writer = PrintWriter(socket.getOutputStream(), true)
+                    val reader = socket.getInputStream().bufferedReader()
 
-            writer.println("AUTHENTICATE \"$password\"")
-            writer.println("SIGNAL NEWNYM")
-            val resp = reader.readLine()
+                    writer.println("AUTHENTICATE \"$password\"")
+                    writer.println("SIGNAL NEWNYM")
+                    val resp = reader.readLine()
 
-            if (!resp.startsWith("250")) throw RuntimeException("Unexpected tor socket response: $resp")
-            logger.info("Tor outbound server changed")
-            sleep(10000)
+                    if (!resp.startsWith("250")) throw RuntimeException("Unexpected tor socket response: $resp")
+                    logger.info("Tor outbound server changed")
+                    sleep(3_000)
+                }
+            } finally {
+                lock.unlock()
+            }
+        } else {
+            logger.warn("TorService is busy, newIdentity skipped.")
         }
     }
 
