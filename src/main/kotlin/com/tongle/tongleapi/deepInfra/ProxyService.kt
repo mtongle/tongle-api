@@ -22,6 +22,8 @@ import java.util.concurrent.TimeUnit
 
 @Service
 class TorService {
+    private val logger = LoggerFactory.getLogger(TorService::class.java)
+
     private val password = "142857@Tor"
 
     fun newIdentity() {
@@ -34,6 +36,7 @@ class TorService {
             val resp = reader.readLine()
 
             if (!resp.startsWith("250")) throw RuntimeException("Unexpected tor socket response: $resp")
+            logger.info("Tor outbound server changed")
             sleep(10000)
         }
     }
@@ -63,7 +66,7 @@ class ProxyService(
     @field:Autowired private val torHttpClient: OkHttpClient,
     @field:Autowired private val torService: TorService,
 ) {
-    val logger = LoggerFactory.getLogger(javaClass)
+    private val logger = LoggerFactory.getLogger(javaClass)
 
     val baseUrl = "https://api.deepinfra.com/v1/openai"
 
@@ -92,18 +95,24 @@ class ProxyService(
             resp = torHttpClient.newCall(req).execute()
 
             // 事先读取响应流
-            val body = resp.body.string()
+            val respBody = resp.body.string()
             val code = resp.code
             val headers = resp.headers
             val protocol = resp.protocol
             val message = resp.message
 
-            // 当获取到有用内容时返回
-            if ( message != "Forbidden" ) {
-                logger.debug("Response body: $body")
+            // 错误日志
+            if ( code != 200 && code != 403 )
+                logger.warn("Unexpected response code: {} {}", code, message)
+            if ( code == 422 )
+                body?.let { logger.warn("Request body: {}", it) }
+
+            // 当获取成功（ip未达到上限）时返回
+            if ( code != 403 ) {
+                logger.debug("Response body: $respBody")
                 return generateResponse(
                     headers = headers,
-                    body = body,
+                    body = respBody,
                     code = code,
                     message = message,
                     protocol = protocol,
@@ -117,7 +126,7 @@ class ProxyService(
             if (attempt >= maxRetry) {
                 val errorBody = "{\"detail\":{\"error\":\"Retry after $maxRetry attempts\"}\"}"
                 return generateResponse(
-                    headers = headers.newBuilder().set("Content-Length", body.length.toString()).build(),
+                    headers = headers.newBuilder().set("Content-Length", respBody.length.toString()).build(),
                     body = errorBody,
                     code = 500,
                     message = "Internal Server Error",

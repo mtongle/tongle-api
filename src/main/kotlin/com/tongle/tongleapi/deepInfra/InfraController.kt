@@ -32,9 +32,9 @@ class InfraController(@field:Autowired val proxyService: ProxyService) {
         // 从请求URI中提取完整的端点路径
         val requestURI = request.requestURI
         val endpoint = requestURI.removePrefix("/deepinfra/v1")
-        logger.info("Original URI: $requestURI")
-        logger.info("Extracted endpoint: $endpoint")
-        logger.info("Headers: $headers")
+        logger.debug("Original URI: {}", requestURI)
+        logger.info("Extracted endpoint: {}", endpoint)
+        logger.debug("Headers: {}", headers)
 
         // 向deepinfra发送请求
         val resp = proxyService.request(
