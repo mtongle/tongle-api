@@ -15,9 +15,11 @@ import org.springframework.context.annotation.Bean
 import org.springframework.stereotype.Service
 import java.io.PrintWriter
 import java.lang.Thread.sleep
+import java.net.HttpRetryException
 import java.net.InetSocketAddress
 import java.net.Proxy
 import java.net.Socket
+import java.net.SocketTimeoutException
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
 
@@ -119,51 +121,57 @@ class ProxyService(
         // 开始重试循环
         var resp: Response
         while (true) {
-            resp = torHttpClient.newCall(req).execute()
+            try{
+                resp = torHttpClient.newCall(req).execute()
 
-            // 事先读取响应流
-            val respBody = resp.body.string()
-            val code = resp.code
-            val headers = resp.headers
-            val protocol = resp.protocol
-            val message = resp.message
+                // 事先读取响应流
+                val respBody = resp.body.string()
+                val code = resp.code
+                val headers = resp.headers
+                val protocol = resp.protocol
+                val message = resp.message
 
-            // 错误日志
-            if ( code != 200 && code != 403 )
-                logger.warn("Unexpected response code: {} {}", code, message)
-            if ( code == 422 )
-                body?.let { logger.warn("Request body: {}", it) }
+                // 错误日志
+                if (code != 200 && code != 403)
+                    logger.warn("Unexpected response code: {} {}", code, message)
+                if (code == 422)
+                    body?.let { logger.warn("Request body: {}", it) }
 
-            // 当获取成功（ip未达到上限）时返回
-            if ( code != 403 ) {
-                logger.debug("Response body: $respBody")
-                return generateResponse(
-                    headers = headers,
-                    body = respBody,
-                    code = code,
-                    message = message,
-                    protocol = protocol,
-                    request = req
-                )
+                // 当获取成功（ip未达到上限）时返回
+                if (code != 403) {
+                    logger.debug("Response body: $respBody")
+                    return generateResponse(
+                        headers = headers,
+                        body = respBody,
+                        code = code,
+                        message = message,
+                        protocol = protocol,
+                        request = req
+                    )
+                }
+
+                attempt++
+
+                // 处理重试超过指定次数
+                if (attempt >= maxRetry) {
+                    val errorBody = "{\"detail\":{\"error\":\"Retry after $maxRetry attempts\"}\"}"
+                    return generateResponse(
+                        headers = headers.newBuilder().set("Content-Length", respBody.length.toString()).build(),
+                        body = errorBody,
+                        code = 500,
+                        message = "Internal Server Error",
+                        protocol = protocol,
+                        request = req
+                    )
+                }
+
+                throw HttpRetryException("Retry after $maxRetry attempts failed", 403)
+            } catch (e: Exception) {
+                when (e) {
+                    is SocketTimeoutException, is HttpRetryException -> torService.newIdentity()
+                    else -> throw e
+                }
             }
-
-            attempt++
-
-            // 处理重试超过指定次数
-            if (attempt >= maxRetry) {
-                val errorBody = "{\"detail\":{\"error\":\"Retry after $maxRetry attempts\"}\"}"
-                return generateResponse(
-                    headers = headers.newBuilder().set("Content-Length", respBody.length.toString()).build(),
-                    body = errorBody,
-                    code = 500,
-                    message = "Internal Server Error",
-                    protocol = protocol,
-                    request = req
-                )
-            }
-
-            // 更换tor出口ip
-            torService.newIdentity()
         }
     }
 
